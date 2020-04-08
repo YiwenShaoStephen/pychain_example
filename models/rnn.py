@@ -1,4 +1,4 @@
-# Copyright 2019 Yiwen Shao
+# Copyright (c) Yiwen Shao
 
 # Apache 2.0
 

@@ -1,0 +1,1 @@
+../../../tools/kaldi/egs/wsj/s5/local/wsj_train_lms.sh
