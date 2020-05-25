@@ -69,7 +69,7 @@ parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 # Architecture
 parser.add_argument('--arch', '-a', metavar='ARCH', default='TDNN',
-                    choices=['TDNN', 'RNN'],
+                    choices=['TDNN', 'RNN', 'LSTM', 'GRU', 'TDNN-LSTM'],
                     help='model architecture: ')
 parser.add_argument('--layers', default=5, type=int, help='number of layers')
 parser.add_argument('--feat-dim', default=40, type=int,

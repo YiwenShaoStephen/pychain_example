@@ -80,7 +80,7 @@ if [ ${stage} -le 3 ]; then
   valid_subset=valid
   mkdir -p $dir/logs
   log_file=$dir/logs/train.log
-  train.py \
+  python3 train.py \
     --train data/train.json \
     --valid data/valid.json \
     --den-fst $treedir/normalization.fst \
