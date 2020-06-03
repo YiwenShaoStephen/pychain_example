@@ -7,8 +7,8 @@
 set -e -o pipefail
 
 stage=0
-ngpus=4 # num GPUs for multiple GPUs training within a single node; should match those in $free_gpu
-free_gpu=0,1,2,3 # comma-separated available GPU ids, eg., "0" or "0,1"; automatically assigned if on CLSP grid
+ngpus=1 # num GPUs for multiple GPUs training within a single node; should match those in $free_gpu
+free_gpu= # comma-separated available GPU ids, eg., "0" or "0,1"; automatically assigned if on CLSP grid
 
 # E2E model related
 affix=
@@ -19,8 +19,8 @@ treedir=data/graph  # contain numerator fst
 
 # data related
 dumpdir=data/dump   # directory to dump full features
-wsj0=/home/CORPUS/LDC/LDC93S6B
-wsj1=/home/CORPUS/LDC/LDC94S13B
+wsj0=
+wsj1=
 if [[ $(hostname -f) == *.clsp.jhu.edu ]]; then
   wsj0=/export/corpora5/LDC/LDC93S6B
   wsj1=/export/corpora5/LDC/LDC94S13B
