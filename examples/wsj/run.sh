@@ -3,6 +3,7 @@
 
 # Apache 2.0
 
+. ./cmd.sh
 set -e -o pipefail
 
 stage=0
