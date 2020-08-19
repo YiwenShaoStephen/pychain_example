@@ -24,6 +24,8 @@ def read_file(ordered_dict, key, dtype, *paths):
         with open(path, "r", encoding="utf-8") as f:
             for line in f:
                 utt_id, val = line.strip().split(None, 1)
+                if val[-1] == '|':
+                    val = val[:-2]
                 if utt_id in ordered_dict:
                     assert key not in ordered_dict[utt_id], \
                         "Duplicate utterance id " + utt_id + " in " + key
@@ -38,28 +40,35 @@ def main():
         description="Wrap all related files of a dataset into a single json file"
     )
     # fmt: off
-    parser.add_argument("--feat-files", nargs="+", required=True,
+    parser.add_argument("--wav-files", nargs="+", required=True,
+                        help="path(s) to scp raw waveform file(s)")
+    parser.add_argument("--dur-files", nargs="+", required=True,
+                        help="path(s) to utt2dur file(s)")
+    parser.add_argument("--feat-files", nargs="+", default=None,
                         help="path(s) to scp feature file(s)")
+    parser.add_argument("--num-frames-files", nargs="+", default=None,
+                        help="path(s) to utt2num_frames file(s)")
     parser.add_argument("--text-files", nargs="+", default=None,
                         help="path(s) to text file(s)")
     parser.add_argument("--numerator-fst-files", nargs="+", default=None,
                         help="path(s) to numerator fst file(s)")
-    parser.add_argument("--utt2num-frames-files", nargs="+", default=None,
-                        help="path(s) to utt2num_frames file(s)")
     parser.add_argument("--output", required=True, type=argparse.FileType("w"),
                         help="path to save json output")
     args = parser.parse_args()
     # fmt: on
 
     obj = OrderedDict()
-    obj = read_file(obj, "feat", str, *(args.feat_files))
+    obj = read_file(obj, "wav", str, *(args.wav_files))
+    obj = read_file(obj, "duration", float, *(args.dur_files))
+    if args.feat_files is not None:
+        obj = read_file(obj, "feat", str, *(args.feat_files))
     if args.text_files is not None:
         obj = read_file(obj, "text", str, *(args.text_files))
     if args.numerator_fst_files is not None:
         obj = read_file(obj, "numerator_fst", str, *(args.numerator_fst_files))
-    if args.utt2num_frames_files is not None:
+    if args.num_frames_files is not None:
         obj = read_file(obj, "length", int,
-                        *(args.utt2num_frames_files))
+                        *(args.num_frames_files))
 
     json.dump(obj, args.output, indent=4)
 

@@ -7,6 +7,11 @@ import re
 from collections import OrderedDict
 import json
 
+from io import BytesIO
+import librosa
+from subprocess import run, PIPE
+import torchaudio
+
 import torch
 import simplefst
 import kaldi_io
@@ -35,11 +40,13 @@ def _collate_fn_train(batch):
     feats = torch.zeros(minibatch_size, max_seqlength, feat_dim)
     feat_lengths = torch.zeros(minibatch_size, dtype=torch.int)
     graph_list = []
+    utt_ids = []
     max_num_transitions = 0
     max_num_states = 0
     for i in range(minibatch_size):
-        feat, length, graph = batch[i]
+        feat, length, utt_id, graph = batch[i]
         feats[i, :length, :].copy_(feat)
+        utt_ids.append(utt_id)
         feat_lengths[i] = length
         graph_list.append(graph)
         if graph.num_transitions > max_num_transitions:
@@ -48,7 +55,7 @@ def _collate_fn_train(batch):
             max_num_states = graph.num_states
     num_graphs = ChainGraphBatch(
         graph_list, max_num_transitions=max_num_transitions, max_num_states=max_num_states)
-    return feats, feat_lengths, num_graphs
+    return feats, feat_lengths, utt_ids, num_graphs
 
 
 def _collate_fn_test(batch):
@@ -121,8 +128,11 @@ class ChainDataset(data.Dataset):
         print("Initializing dataset...")
         for utt_id, val in tqdm(loaded_json.items()):
             sample = {}
-            sample['feat'] = val['feat']
+            sample['utt_id'] = utt_id
+            sample['wav'] = val['wav']
             sample['text'] = val['text']
+            sample['duration'] = float(val['duration'])
+            sample['feat'] = val['feat']
             sample['length'] = int(val['length'])
 
             if self.train:  # only training data has fst (graph)
@@ -130,25 +140,23 @@ class ChainDataset(data.Dataset):
                 if self.cache_graph:  # cache all fsts at once
                     filename, offset = parse_rxfile(fst_rxf)
                     fst = simplefst.StdVectorFst.read_ark(filename, offset)
-                    graph = ChainGraph(fst)
+                    graph = ChainGraph(fst, log_domain=True)
                     if graph.is_empty:
                         continue
                     sample['graph'] = graph
                 else:
                     sample['graph'] = fst_rxf
 
-            else:
-                sample['utt_id'] = utt_id
-
             self.samples.append(sample)
 
         if self.sort:
             # sort the samples by their feature length
             self.samples = sorted(
-                self.samples, key=lambda sample: sample['length'])
+                self.samples, key=lambda sample: sample['duration'])
 
     def __getitem__(self, index):
         sample = self.samples[index]
+        utt_id = sample['utt_id']
         feat_ark = sample['feat']
         feat = torch.from_numpy(kaldi_io.read_mat(feat_ark))
         feat_length = sample['length']
@@ -161,19 +169,10 @@ class ChainDataset(data.Dataset):
                 filename, offset = parse_rxfile(fst_rxf)
                 fst = simplefst.StdVectorFst.read_ark(filename, offset)
                 graph = ChainGraph(fst)
-            return feat, feat_length, graph
+            return feat, feat_length, utt_id, graph
         else:
             utt_id = sample['utt_id']
             return feat, feat_length, utt_id
 
     def __len__(self):
         return len(self.samples)
-
-
-if __name__ == '__main__':
-    json_path = 'data/train.json'
-    trainset = ChainDataset(json_path)
-    trainloader = AudioDataLoader(trainset, batch_size=2, shuffle=True)
-
-    feat, feat_lengths, graphs = next(iter(trainloader))
-    print(feat.size())

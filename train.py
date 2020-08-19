@@ -128,14 +128,14 @@ def main():
     print(model)
 
     if use_cuda:
-        model = torch.nn.DataParallel(model).cuda()
+        model = model.cuda()
         cudnn.benchmark = True
     print('    Total params: %.2fM' % (sum(p.numel()
                                            for p in model.parameters()) / 1000000.0))
 
     # loss
     den_fst = simplefst.StdVectorFst.read(args.den_fst)
-    den_graph = ChainGraph(den_fst, leaky_mode='transition')
+    den_graph = ChainGraph(den_fst)
     criterion = ChainLoss(den_graph)
 
     # optimizer
@@ -209,7 +209,7 @@ def train(trainloader, model, criterion, optimizer, writer, epoch, use_cuda):
 
     lr = optimizer.param_groups[0]['lr']
     writer.add_scalar('lr', lr, epoch)
-    for batch_idx, (inputs, input_lengths, graphs) in enumerate(trainloader):
+    for batch_idx, (inputs, input_lengths, utt_ids, graphs) in enumerate(trainloader):
         # measure data loading time
         data_time.update(time.time() - end)
 
@@ -234,9 +234,10 @@ def train(trainloader, model, criterion, optimizer, writer, epoch, use_cuda):
         # print progress
         if batch_idx % args.print_freq == 0:
             print('Train: [{0}][{1}/{2}]\t'
+                  'Lr: {lr}\t'
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(
-                      epoch, batch_idx, len(trainloader), batch_time=batch_time,
+                      epoch, batch_idx, len(trainloader), lr=lr, batch_time=batch_time,
                       loss=losses))
     # log to TensorBoard
     writer.add_scalar('train_loss', losses.avg, epoch)
@@ -254,7 +255,7 @@ def test(testloader, model, criterion, writer, epoch, use_cuda):
     model.eval()
 
     end = time.time()
-    for batch_idx, (inputs, input_lengths, graphs) in enumerate(testloader):
+    for batch_idx, (inputs, input_lengths, utt_ids, graphs) in enumerate(testloader):
         # measure data loading time
         data_time.update(time.time() - end)
 
