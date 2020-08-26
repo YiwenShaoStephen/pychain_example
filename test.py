@@ -56,7 +56,7 @@ def main():
         print(model)
 
         if use_cuda:
-            model = torch.nn.DataParallel(model).cuda()
+            model = model.cuda()
 
         # Load checkpoint.
         print('==> Resuming from checkpoint..')
@@ -71,6 +71,8 @@ def test(testloader, model, output_file, use_cuda):
     model.eval()
     with open(output_file, 'wb') as f:
         for i, (inputs, input_lengths, utt_ids) in enumerate(testloader):
+            if use_cuda:
+                inputs = inputs.cuda()
             lprobs, output_lengths = model(inputs, input_lengths)
             for j in range(inputs.size(0)):
                 output_length = output_lengths[j]
