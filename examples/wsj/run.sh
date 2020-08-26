@@ -157,15 +157,14 @@ fi
 
 if [ ${stage} -le 6 ]; then
   echo "Stage 6: Dumping Posteriors for Test Data"
-  path=$dir/$checkpoint
   log_file=$dir/logs/dump_$test_set.log
   result_file=$test_set/posteriors.ark
   mkdir -p $dir/$test_set
-  $cuda_cmd $log_file test.py \
-	    --test data/test_${type}${unit}.json \
-	    --exp $dir \
-	    --model model_best.pth.tar \
-	    --results $result_file
+  python3 test.py \
+	  --test data/test_${type}${unit}.json \
+	  --model model_best.pth.tar \
+	  --results $result_file \
+	  --exp $dir 2>&1 | tee $log_file
 fi
 
 if [ ${stage} -le 7 ]; then
