@@ -1,0 +1,1 @@
+../../../tools/kaldi/egs/mini_librispeech/s5/local/download_lm.sh
