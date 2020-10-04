@@ -115,11 +115,12 @@ class BucketSampler(Sampler):
 
 class ChainDataset(data.Dataset):
 
-    def __init__(self, data_json_path, train=True, cache_graph=True, sort=True):
+    def __init__(self, data_json_path, train=True, cache_graph=True, sort=True, no_feat=False):
         super(ChainDataset, self).__init__()
         self.train = train
         self.cache_graph = cache_graph
         self.sort = sort
+        self.no_feat = no_feat
         self.samples = []  # list of dicts
 
         with open(data_json_path, 'rb') as f:
@@ -132,8 +133,9 @@ class ChainDataset(data.Dataset):
             sample['wav'] = val['wav']
             sample['text'] = val['text']
             sample['duration'] = float(val['duration'])
-            sample['feat'] = val['feat']
-            sample['length'] = int(val['length'])
+            if not self.no_feat:
+                sample['feat'] = val['feat']
+                sample['length'] = int(val['length'])
 
             if self.train:  # only training data has fst (graph)
                 fst_rxf = val['numerator_fst']
@@ -157,9 +159,26 @@ class ChainDataset(data.Dataset):
     def __getitem__(self, index):
         sample = self.samples[index]
         utt_id = sample['utt_id']
-        feat_ark = sample['feat']
-        feat = torch.from_numpy(kaldi_io.read_mat(feat_ark))
-        feat_length = sample['length']
+        if not self.no_feat:
+            feat_ark = sample['feat']
+            feat = torch.from_numpy(kaldi_io.read_mat(feat_ark))
+            feat_length = sample['length']
+        else:  # raw waveform
+            wav_file = sample['wav']
+            if len(wav_file.split()) > 1:
+                # wav_file is in command format
+                source = BytesIO(run(wav_file, shell=True, stdout=PIPE).stdout)
+                wav, sampling_rate = librosa.load(
+                    source,
+                    sr=None,  # 'None' uses the native sampling rate
+                    mono=False,  # Retain multi-channel if it's there
+                )
+                wav = torch.from_numpy(wav).unsqueeze(0)
+            else:
+                wav, sampling_rate = torchaudio.load(wav_file)
+
+            feat = wav.transpose(0, 1)
+            feat_length = feat.size(0)
 
         if self.train:
             if self.cache_graph:
@@ -176,3 +195,12 @@ class ChainDataset(data.Dataset):
 
     def __len__(self):
         return len(self.samples)
+
+
+if __name__ == '__main__':
+    json_path = 'data/valid_monophone.json'
+    trainset = ChainDataset(json_path, no_feat=False)
+    trainloader = AudioDataLoader(trainset, batch_size=2, shuffle=False)
+    feat, feat_lengths, utt_ids, graphs = next(iter(trainloader))
+    print(feat.size())
+    print(feat_lengths)

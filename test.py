@@ -52,7 +52,9 @@ def main():
                           model_args.arch, kernel_sizes=model_args.kernel_sizes,
                           dilations=model_args.dilations,
                           strides=model_args.strides,
-                          bidirectional=model_args.bidirectional)
+                          bidirectional=model_args.bidirectional,
+                          dropout=model_args.dropout)
+        # residual=model_args.residual if model_args.residual else False)
         print(model)
 
         if use_cuda:

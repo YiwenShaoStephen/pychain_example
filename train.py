@@ -11,7 +11,6 @@ import random
 
 import torch
 import torch.nn.parallel
-import torch.backends.cudnn as cudnn
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 import torch.optim.lr_scheduler as lr_scheduler
@@ -69,7 +68,8 @@ parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 # Architecture
 parser.add_argument('--arch', '-a', metavar='ARCH', default='TDNN',
-                    choices=['TDNN', 'RNN', 'LSTM', 'GRU', 'TDNN-LSTM'],
+                    choices=['TDNN', 'RNN', 'LSTM',
+                             'GRU', 'TDNN-LSTM', 'TDNN-MFCC'],
                     help='model architecture: ')
 parser.add_argument('--layers', default=5, type=int, help='number of layers')
 parser.add_argument('--feat-dim', default=40, type=int,
@@ -84,8 +84,16 @@ parser.add_argument('--dilations', default=[1, 1, 3, 3, 3], type=int, nargs='+',
                     help='dilations for TDNN/CNN kernels (only required for TDNN)')
 parser.add_argument('--strides', default=[1, 1, 1, 1, 3], type=int, nargs='+',
                     help='strides for TDNN/CNN kernels (only required for TDNN)')
+parser.add_argument('--residual', default=False, type=bool,
+                    help='residual connection in TDNN')
 parser.add_argument('--bidirectional', default=False, type=bool,
                     help='bidirectional rnn')
+# LF-MMI Loss
+parser.add_argument('--leaky', default=1e-5, type=float,
+                    help='leaky hmm coefficient for the denominator')
+# Feature extraction
+parser.add_argument('--no-feat', action='store_true',
+                    help='not using pre-extracted features but train from raw wav')
 # Miscs
 parser.add_argument('--seed', type=int, default=0, help='manual seed')
 
@@ -94,7 +102,6 @@ print(args)
 
 # Use CUDA
 use_cuda = torch.cuda.is_available()
-
 # Random seed
 random.seed(args.seed)
 torch.manual_seed(args.seed)
@@ -111,12 +118,14 @@ def main():
     start_epoch = args.start_epoch  # start from epoch 0 or last checkpoint epoch
 
     # Data
-    trainset = ChainDataset(args.train)
+    trainset = ChainDataset(args.train, no_feat=args.no_feat)
     trainsampler = BucketSampler(trainset, args.train_bsz)
-    trainloader = AudioDataLoader(trainset, batch_sampler=trainsampler)
+    trainloader = AudioDataLoader(
+        trainset, batch_sampler=trainsampler, num_workers=4)
 
-    validset = ChainDataset(args.valid)
-    validloader = AudioDataLoader(validset, batch_size=args.valid_bsz)
+    validset = ChainDataset(args.valid, no_feat=args.no_feat)
+    validloader = AudioDataLoader(
+        validset, batch_size=args.valid_bsz, num_workers=4)
 
     # Model
     print("==> creating model '{}'".format(args.arch))
@@ -124,19 +133,19 @@ def main():
                       kernel_sizes=args.kernel_sizes, dilations=args.dilations,
                       strides=args.strides,
                       bidirectional=args.bidirectional,
-                      dropout=args.dropout)
+                      dropout=args.dropout,
+                      residual=args.residual)
     print(model)
 
     if use_cuda:
         model = model.cuda()
-        cudnn.benchmark = True
     print('    Total params: %.2fM' % (sum(p.numel()
                                            for p in model.parameters()) / 1000000.0))
 
     # loss
     den_fst = simplefst.StdVectorFst.read(args.den_fst)
     den_graph = ChainGraph(den_fst)
-    criterion = ChainLoss(den_graph)
+    criterion = ChainLoss(den_graph, args.leaky)
 
     # optimizer
     if args.optimizer == 'sgd':
@@ -192,7 +201,10 @@ def main():
             'args': args,
         }, is_best, exp=args.exp)
 
-        scheduler.step(valid_loss)
+        if args.scheduler == 'plateau':
+            scheduler.step(valid_loss)
+        else:
+            scheduler.step()
 
     print('Best loss:')
     print(best_loss)
